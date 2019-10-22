@@ -20,17 +20,13 @@
 #
 #     You should have received a copy of the GNU General Public License
 #     along with this program.  If not, see <https://www.gnu.org/licenses/>."""
-try:
-    import requests
-    import os
-    import json
-    import csv
-    import re
-    import numpy as np
-    from bs4 import BeautifulSoup
-    from datetime import datetime as dt
-except Exception as err:
-    print(err)
+
+import requests
+import os
+import json
+import csv
+from bs4 import BeautifulSoup
+from datetime import datetime as dt
 
 
 class GetBase():
@@ -42,24 +38,26 @@ class GetBase():
         self.file_name_json = self.mixed_f + '.json'
         self.BASE_DIR = os.getcwd()
         self.dirname = 'observatory'
-        self.check_file = os.path.exists
-        self.dateregex = '[0-9]+[.]+'
-        self.timeregex = '[0-9]+[:]+'
-        self.check_ilksel = ['ilksel']
+        self.check = ['REVIZE01']
         self.dict_box = []
         self.collector = []
+        self.collector_REVIZE = []
+        self.counter_ilksel = []
         self.counter_numline = []
+        self.counter_REVIZE = []
+        self.collect_thrd = []
         self._error = True
-        self.float_base = 0.0
-        self.float_oldbase = ['-.-']
-        self.cols = ['Tarih', 'Saat', 'Enlem',
-                     'Boylam', 'DerinlikKm',
+        self.cols = ['Tarih', 'Saat', 'Enlem(N)',
+                     'Boylam(E)', 'Derinlik(km)',
                      'MD', 'ML', 'Mw', 'Yer',
-                     'ÇozumNiteligi']
+                     'Çözüm-Niteliği']
 
+        self.check_file = os.path.exists
         # specify the URL of the archive here ***
         self.archive_url = "http://www.koeri.boun.edu.tr/scripts/lst2.asp"
-        # ***
+        #***
+
+
 
 class GetLink(GetBase):
     def __init__(self):
@@ -73,8 +71,8 @@ class GetLink(GetBase):
 
             # create beautiful-soup object
             self.soup = BeautifulSoup(self.r.content, 'html5lib')
-            # or
-            # soup = BeautifulSoup(r.content, 'html.parser')
+            #or
+            # self.soup = BeautifulSoup(self.r.content, 'html.parser')
 
             # find all links on web-page
             self.text = self.soup.get_text()
@@ -87,50 +85,44 @@ class GetLink(GetBase):
 
             # print("end of lines: ",self.get_data.splitlines()[-1:])
             self.get_data = self.get_data[:-1]
-        except Exception as err:
-            print(err)
-            self._error = False
-        finally:
-            if self._error:
-                return self.link_parsing()
 
-    def link_parsing(self):
-        try:
             for num_line, line in enumerate(self.get_data.splitlines()):
-                self.dict = {}
                 self.counter_numline.append(num_line)
-                self.matrix_base = np.array(line.split())
-                for dict_index in range(len(self.cols[:5])):
-                    self.dict[self.cols[dict_index]] = self.matrix_base[dict_index]
-                if self.matrix_base[5] in self.float_oldbase:
-                    self.dict[self.cols[5]] = self.float_base
-                else:
-                    self.dict[self.cols[5]] = self.matrix_base[5]
-                if self.matrix_base[6] in self.float_oldbase:
-                    self.dict[self.cols[6]] = self.float_base
-                else:
-                    self.dict[self.cols[6]] = self.matrix_base[6]
-                if self.matrix_base[7] in self.float_oldbase:
-                    self.dict[self.cols[7]] = self.float_base
-                else:
-                    self.dict[self.cols[7]] = self.matrix_base[7]
+                for num_partline, part_line in enumerate(line.split()):
+                    if part_line == line.split()[0]:
+                        self.dict = {}
+                        for dict_index in range(len(self.cols[:7])):
+                            self.dict[self.cols[dict_index]] = line.split()[dict_index]
+                        self.collect = ''
+                        self.collect_scnd = ''
 
-                self.matrix_col_eight = [x for x in self.matrix_base[8:] if x.isupper()]
-                self.matrix_revize = [y for y in self.matrix_base[8:] if re.search("[A-Z]+[0-9]+", y)]
-                self.matrix_revize_date = [p for p in self.matrix_base[8:] if re.search(self.dateregex, p)]
-                self.matrix_revize_time = [k for k in self.matrix_base[8:] if re.match(self.timeregex, k)]
-                self.matrix_ilksel = np.array(
-                    [z for z in self.matrix_base[8:] if z in self.matrix_base[-1] and re.match('^.*[a-z]', z)])
-                if self.matrix_col_eight:
-                    self.dict[self.cols[8]] = ''.join(map(str, self.matrix_col_eight))
+                        # search for = Yer before last column
+                    elif part_line not in self.check and part_line.isupper():
+                        self.collect += part_line
 
-                if self.matrix_revize or self.matrix_revize_date or self.matrix_revize_time:
-                    self.dict[self.cols[9]] = self.matrix_revize[0] + '' + self.matrix_revize_date[0] + '-' + \
-                                              self.matrix_revize_time[0]
-                if self.matrix_ilksel:
-                    self.dict[self.cols[9]] = self.matrix_ilksel[0]
+                        # search for = 'REVİZE++' last column
+                    elif part_line in self.check:
+                        self.counter_REVIZE.append(part_line)
+                        self.parse_REVIZE = ''
+                        self.collect_scnd =line.split()[num_partline:][0:]
+                        for z in self.collect_scnd:
+                            self.parse_REVIZE += z + '-'
+                            self.collect_scnd = self.parse_REVIZE[:-1]
+                        self.collector_REVIZE.append(num_line)
+                        # search for = 'İlksel' last column
+                    elif part_line == line.split()[-1]:
+                        for count_num in self.counter_numline:
+                            if count_num in self.collector_REVIZE:
+                                self.counter_numline.remove(count_num)
 
+                self.dict[self.cols[8]] = self.collect
+                self.dict[self.cols[9]] = self.collect_scnd
                 self.dict_box.append(self.dict)
+
+            for only_ilksel in self.counter_numline:
+                self.last_part = self.get_data.splitlines()[only_ilksel].split()[-1]
+                self.dict_box[only_ilksel][self.cols[9]] = self.last_part
+
         except (Exception) as error:
             print(error)
             self._error = False
@@ -138,14 +130,12 @@ class GetLink(GetBase):
         finally:
             if self._error:
                 if self.dict_box:
-                    print(self.dict_box)
                     return self.dict_box
 
-                    # +++++++Check your data+++++++
-                    # for num, i in enumerate(self.dict_box):
-                    #     print(num, i)
-
-
+        #         # +++++++Check your data+++++++
+        #         for num, i in enumerate(self.dict_box):
+        #             print(num, i)
+                pass
 
 
 class GetDataJSON(GetBase):
@@ -156,17 +146,16 @@ class GetDataJSON(GetBase):
 
     def create(self):
         try:
-            if self.data:
-                ishere = os.path.exists(self.dirname)
-                if ishere:
-                    pass
-                else:
-                    os.mkdir(self.dirname)
+            ishere = os.path.exists(self.dirname)
+            if ishere:
+                pass
+            else:
+                os.mkdir(self.dirname)
 
-                self.join_with = os.path.join(self.BASE_DIR, self.dirname, self.file_name_json)
-                with open(self.join_with, 'w') as write_json:
-                    if self.data:
-                        json.dump(self.data,write_json,ensure_ascii=False,indent=4)
+            self.join_with = os.path.join(self.BASE_DIR, self.dirname, self.file_name_json)
+            with open(self.join_with, 'w') as write_json:
+                if self.data:
+                    json.dump(self.data,write_json,ensure_ascii=False,indent=4)
 
         except Exception as error:
             print(error)
@@ -196,19 +185,18 @@ class GetDataCSV(GetBase):
 
     def create(self):
         try:
-            if self.dict_data:
-                ishere = os.path.exists(self.dirname)
-                if ishere:
-                    pass
-                else:
-                    os.mkdir(self.dirname)
+            ishere = os.path.exists(self.dirname)
+            if ishere:
+                pass
+            else:
+                os.mkdir(self.dirname)
 
-                self.join_with = os.path.join(self.BASE_DIR, self.dirname, self.file_name_csv)
-                with open(self.join_with, 'w') as write_csv:
-                    writer = csv.DictWriter(write_csv, fieldnames=self.cols)
-                    writer.writeheader()
-                    for data in self.dict_data:
-                        writer.writerow(data)
+            self.join_with = os.path.join(self.BASE_DIR, self.dirname, self.file_name_csv)
+            with open(self.join_with, 'w') as write_csv:
+                writer = csv.DictWriter(write_csv, fieldnames=self.cols)
+                writer.writeheader()
+                for data in self.dict_data:
+                    writer.writerow(data)
 
         except Exception as error:
             print(error)
