@@ -1,6 +1,6 @@
 
 import abc
-from parse import Parse
+from parse_service import ParseServiceImpl
 from json_service import JsonService
 from csv_service import CsvService
 from url_service import UrlServiceImpl
@@ -30,16 +30,26 @@ class Builder(IBuilder):
 
     def __init__(self):
         self.result = Result()
+        print(self.result)
 
     def with_url(self, url):
-        "do something"
+        "get dirty text data from url"
+
+        #-----------------------------(err,data,className)--
+        #self.parseable : type - tuple(bool,string,bool)
         self.parseable = UrlServiceImpl(url).get_data()
-        assert(self.parseable != True),"with_url in error"
+        self.parse_status = self.parseable[0]
+        assert(self.parse_status == True),"URL Service -- Error"
+        self.parseable_data = self.parseable[1]
         return self
 
     def with_parse(self):
         "parse data from url"
-        print(Parse())
+
+        self.clean = ParseServiceImpl(self.parseable_data).get_data()
+        self.clean_status = self.clean[0]
+        assert(self.clean_status == True), "Parse service -- Error"
+        self.clean_data = self.clean[1]
         return self
 
     def with_json(self):
@@ -59,17 +69,20 @@ class Builder(IBuilder):
 class Result():
     "Result clean data"
 
-    def __init__(self):
-        print("Result will be created")
+
+    def __str__(self):
+        return "Result will be create"
 
 
+
+        
 
 def main():
+    "test "
 
     archive_url = "http://www.koeri.boun.edu.tr/scripts/lst2.asp"
     builder = Builder()
-    builder.with_url(archive_url).with_parse(
-    ).with_json().with_close()
+    builder.with_url(archive_url).with_parse().with_json().with_close()
 
 
 if __name__ == "__main__":

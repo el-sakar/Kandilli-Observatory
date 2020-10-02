@@ -1,3 +1,7 @@
 /observatory/
 /venv/
 .idea
+observatory/
+*/__**
+*~
+*/*~
